@@ -1,0 +1,109 @@
+#!/bin/bash
+
+: ${lha_dir=@top_builddir@/src}
+: ${lha_cmd=$(cd $lha_dir && pwd)/lha}
+: ${srcdir=@srcdir@}
+
+trap '_stat=$?; rm -rf test-*; exit $_stat' 0 1 2 3 15
+
+typeset -i i	# for loop
+typeset -i test_number=0 error_num=0
+error_tests=""
+
+# fd 1: for logging
+# fd 2: output screen
+# fd 5: for logging
+exec 5>test.log >&5
+
+lha=exec_lha
+exec_lha()
+{
+  echo "$ lha $@" >&5	# for logging (stdout(fd 1) may be redirected)
+  $lha_cmd "$@"
+}
+
+message()
+{
+  echo "$@" >&2
+  echo "$@"
+}
+
+check()
+{
+  ((test_number = test_number + 1))
+  typeset status=$1
+  typeset lineno=$2
+  if [[ $status -eq 0 ]]; then
+    echo    "$FILENAME #$test_number ... ok" >&2
+    echo    "$FILENAME #$test_number ... ok at line $lineno"
+  else
+    message "$FILENAME #$test_number ... failed at line $lineno"
+    ((error_num = error_num + 1))
+    error_tests="$error_tests $FILENAME #$test_number"
+    result=1
+  fi
+}
+
+cleanup()
+{
+  rm -rf test-tmp*
+}
+
+testsuite()
+{
+    # the `FILENAME' variable should be set the each test filename.
+    FILENAME=$1 test_number=0
+
+    . $srcdir/$FILENAME
+
+    cleanup
+}
+
+# utility functions
+
+change_timestamp()
+{
+    typeset time=$1; shift
+
+    # assume that `touch' command supports POSIX's -t switch.
+
+    # -t [[CC]YY]MMDDhhmm[.ss]
+    touch -t $time "$@"
+
+    # [[CC]YY]MMDDhhmm
+    # touch $time "$@"
+}
+
+# test start
+
+message testing $lha
+message `$lha --version 2>&1`
+
+testsuite lha-test1		# create test data. it is needed for each test
+testsuite lha-test2
+testsuite lha-test3
+testsuite lha-test4
+testsuite lha-test5
+#testsuite lha-test6		# this feature was removed.
+testsuite lha-test7
+testsuite lha-test8
+#testsuite lha-test9		# incomplete
+testsuite lha-test10
+testsuite lha-test11
+testsuite lha-test12
+testsuite lha-test13
+case `$lha --version 2>&1` in
+*-pc-mingw*)
+  message testing to handle symbolic links ... skip
+  ;;
+*)
+  testsuite lha-test14
+esac
+testsuite lha-test15
+
+if (( $error_num != 0 )); then
+  message $error_num tests failed!
+  message test number: $error_tests
+fi
+
+exit $result
